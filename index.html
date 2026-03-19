@@ -155,42 +155,10 @@ function update(){
     ctx.fillStyle="lime";
     ctx.fillRect(boss.x-50,boss.y-80,100*(boss.hp/boss.maxHp),10);
 
-    // ボスの弾（通常 or 第2形態）
+    // ボスの弾
     if(!boss.bullets) boss.bullets=[];
-
-    // 第2形態判定
-    const phase2 = boss.hp <= boss.maxHp / 2;
-
-    if(Math.random() < (phase2 ? 0.05 : 0.02)){
-      if(phase2){
-        // 三方向弾（扇状）
-        boss.bullets.push({x:boss.x,y:boss.y,dx:-1,dy:4});
-        boss.bullets.push({x:boss.x,y:boss.y,dx:0,dy:4});
-        boss.bullets.push({x:boss.x,y:boss.y,dx:1,dy:4});
-      }else{
-        // 通常弾
-        boss.bullets.push({x:boss.x,y:boss.y,dx:0,dy:4});
-      }
-    }
-
-    boss.bullets.forEach((bb,bi)=>{
-      bb.x += bb.dx;
-      bb.y += bb.dy;
-      ctx.fillStyle="purple";
-      ctx.fillRect(bb.x-3,bb.y,6,12);
-
-      // プレイヤーに当たる
-      let dx=bb.x-player.x,dy=bb.y-player.y;
-      if(Math.sqrt(dx*dx+dy*dy)<30){
-        boss.bullets.splice(bi,1);
-        hp-=10;
-        document.getElementById("hp").textContent=hp;
-        effects.push({x:player.x,y:player.y,text:"💥",life:20});
-        if(hp<=0)gameOver();
-      }
-
-      if(bb.y>canvas.height) boss.bullets.splice(bi,1);
-    });
+    if(Math.random()<0.02){
+      boss.bullets.push({x:boss.x,y:boss.y});
     }
 
     boss.bullets.forEach((bb,bi)=>{
@@ -275,3 +243,4 @@ canvas.addEventListener("touchstart",()=>{bullets.push({x:player.x,y:player.y});
 </script>
 </body>
 </html>
+
