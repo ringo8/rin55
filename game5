@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ポップシューティングゲーム</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    font-family: sans-serif;
+    background: linear-gradient(#87CEFA, #ffb6c1);
+  }
+  canvas { display: block; }
+  #ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-size: 18px;
+  }
+  #gameOver {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 32px;
+    text-align: center;
+    display: none;
+  }
+  button {
+    margin-top: 10px;
+    padding: 10px 20px;
+    font-size: 18px;
+    border: none;
+    border-radius: 10px;
+    background: #ff69b4;
+    color: white;
+  }
+</style>
+</head>
+<body>
+<div id="ui">
+  スコア: <span id="score">0</span><br>
+  HP: <span id="hp">5</span>
+</div>
+
+<div id="gameOver">
+  ゲームオーバー<br>
+  <button onclick="restart()">もう一回</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let player, bullets, enemies, score, hp, running;
+
+function init(){
+  player = { x: canvas.width/2, y: canvas.height-80, size: 20 };
+  bullets = [];
+  enemies = [];
+  score = 0;
+  hp = 5;
+  running = true;
+  document.getElementById("score").textContent = score;
+  document.getElementById("hp").textContent = hp;
+  document.getElementById("gameOver").style.display = "none";
+}
+
+function spawnEnemy(){
+  if(!running) return;
+  enemies.push({
+    x: Math.random()*canvas.width,
+    y: -20,
+    size: 20,
+    speed: 2 + Math.random()*2
+  });
+}
+
+setInterval(spawnEnemy, 1000);
+
+function update(){
+  if(!running) return;
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // player
+  ctx.fillStyle = "yellow";
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.size, 0, Math.PI*2);
+  ctx.fill();
+
+  // bullets
+  ctx.fillStyle = "white";
+  bullets.forEach((b, i)=>{
+    b.y -= 5;
+    ctx.fillRect(b.x-2, b.y, 4, 10);
+    if(b.y < 0) bullets.splice(i,1);
+  });
+
+  // enemies
+  ctx.fillStyle = "red";
+  enemies.forEach((e, ei)=>{
+    e.y += e.speed;
+
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.size, 0, Math.PI*2);
+    ctx.fill();
+
+    // bullet collision
+    bullets.forEach((b, bi)=>{
+      let dx = e.x - b.x;
+      let dy = e.y - b.y;
+      if(Math.sqrt(dx*dx+dy*dy) < e.size){
+        enemies.splice(ei,1);
+        bullets.splice(bi,1);
+        score++;
+        document.getElementById("score").textContent = score;
+      }
+    });
+
+    // player collision
+    let dx = e.x - player.x;
+    let dy = e.y - player.y;
+    if(Math.sqrt(dx*dx+dy*dy) < e.size + player.size){
+      enemies.splice(ei,1);
+      hp--;
+      document.getElementById("hp").textContent = hp;
+      if(hp <= 0){
+        gameOver();
+      }
+    }
+
+    // missed enemy
+    if(e.y > canvas.height){
+      enemies.splice(ei,1);
+      hp--;
+      document.getElementById("hp").textContent = hp;
+      if(hp <= 0){
+        gameOver();
+      }
+    }
+  });
+
+  requestAnimationFrame(update);
+}
+
+function gameOver(){
+  running = false;
+  document.getElementById("gameOver").style.display = "block";
+}
+
+function restart(){
+  init();
+  update();
+}
+
+// タッチ操作
+canvas.addEventListener("touchmove", e=>{
+  player.x = e.touches[0].clientX;
+});
+
+canvas.addEventListener("touchstart", ()=>{
+  bullets.push({ x: player.x, y: player.y });
+});
+
+// PC対応
+canvas.addEventListener("mousemove", e=>{
+  player.x = e.clientX;
+});
+canvas.addEventListener("click", ()=>{
+  bullets.push({ x: player.x, y: player.y });
+});
+
+init();
+update();
+</script>
+</body>
+</html>
