@@ -7,25 +7,10 @@
 <style>
   body { margin:0; overflow:hidden; font-family:sans-serif; background:linear-gradient(#87CEFA,#ffb6c1);} 
   canvas{display:block;}
-
-  #logo{
-    font-size:36px;
-    font-weight:bold;
-    background: linear-gradient(90deg, #ff69b4, #ffd700, #00ffff);
-    -webkit-background-clip: text;
-    color: transparent;
-    text-shadow: 2px 2px 8px rgba(0,0,0,0.3);
-    margin-bottom:10px;
-  }
-
-  #startScreen,#gameOver{
-    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-    color:white;text-align:center;
-  }
-
+  #logo{font-size:36px;font-weight:bold;background:linear-gradient(90deg,#ff69b4,#ffd700,#00ffff);-webkit-background-clip:text;color:transparent;text-shadow:2px 2px 8px rgba(0,0,0,0.3);margin-bottom:10px;}
+  #startScreen,#gameOver{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;text-align:center;}
   #ui{position:absolute;top:10px;left:10px;color:white;font-size:18px;display:none;}
   #controls{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);color:white;font-size:14px;background:rgba(0,0,0,0.3);padding:8px;border-radius:10px;display:none;}
-
   button{margin-top:10px;padding:10px 20px;font-size:18px;border:none;border-radius:10px;background:#ff69b4;color:white;}
 </style>
 </head>
@@ -36,19 +21,10 @@
   <button onclick="startGame()">スタート</button>
 </div>
 
-<div id="ui">
-  スコア: <span id="score">0</span><br>
-  HP: <span id="hp">5</span>
-</div>
+<div id="ui">スコア: <span id="score">0</span><br>HP: <span id="hp">5</span></div>
+<div id="controls">← →：移動 / スペース：発射（長押しで必殺技）</div>
 
-<div id="controls">
-  ← →：移動 / スペース：発射（長押しで必殺技）
-</div>
-
-<div id="gameOver" style="display:none;">
-  ゲームオーバー<br>
-  <button onclick="restart()">もう一回</button>
-</div>
+<div id="gameOver" style="display:none;">ゲームオーバー<br><button onclick="restart()">もう一回</button></div>
 
 <canvas id="game"></canvas>
 
@@ -58,18 +34,21 @@ const ctx=canvas.getContext("2d");
 canvas.width=window.innerWidth;
 canvas.height=window.innerHeight;
 
-let player,bullets,enemies,score,hp,running;
+let player,bullets,enemies,effects,score,hp,running;
 let leftPressed=false,rightPressed=false;
 let spacePressed=false;
 let charge=0;
 let spawnRate=1000;
 let enemyTimer;
 
-const playerImg=new Image();
-playerImg.src="https://i.imgur.com/4AiXzf8.jpeg";
+const enemyTypes=[
+  {type:"🦖",hp:1},
+  {type:"🦕",hp:2},
+  {type:"🐲",hp:3},
+  {type:"👾",hp:2}
+];
 
-const enemyImg=new Image();
-enemyImg.src="https://i.imgur.com/Z6XbK0K.png"; // キャラ風敵
+const specialTargets=["🐲","👾"];
 
 function startGame(){
   document.getElementById("startScreen").style.display="none";
@@ -80,7 +59,7 @@ function startGame(){
 
 function init(){
   player={x:canvas.width/2,y:canvas.height-100,size:30,speed:6};
-  bullets=[];enemies=[];score=0;hp=5;running=true;
+  bullets=[];enemies=[];effects=[];score=0;hp=5;running=true;
   charge=0;
   document.getElementById("score").textContent=score;
   document.getElementById("hp").textContent=hp;
@@ -91,7 +70,8 @@ function startSpawning(){
   clearInterval(enemyTimer);
   enemyTimer=setInterval(()=>{
     if(!running)return;
-    enemies.push({x:Math.random()*canvas.width,y:-20,size:25,speed:2+Math.random()*3});
+    const eType=enemyTypes[Math.floor(Math.random()*enemyTypes.length)];
+    enemies.push({x:Math.random()*canvas.width,y:-20,size:30,speed:2+Math.random()*3,type:eType.type,hp:eType.hp});
   },spawnRate);
 
   setInterval(()=>{
@@ -107,12 +87,11 @@ function update(){
   if(rightPressed)player.x+=player.speed;
   player.x=Math.max(player.size,Math.min(canvas.width-player.size,player.x));
 
-  ctx.drawImage(playerImg,player.x-30,player.y-30,60,60);
+  ctx.font="40px serif";
+  ctx.textAlign="center";
+  ctx.fillText("🍎",player.x,player.y);
 
-  // charge shot
-  if(spacePressed){
-    charge++;
-  }
+  if(spacePressed)charge++;
 
   // bullets
   ctx.fillStyle="white";
@@ -125,13 +104,20 @@ function update(){
   // enemies
   enemies.forEach((e,ei)=>{
     e.y+=e.speed;
-    ctx.drawImage(enemyImg,e.x-25,e.y-25,50,50);
+    ctx.font="40px serif";
+    ctx.fillText(e.type,e.x,e.y);
 
     bullets.forEach((b,bi)=>{
       let dx=e.x-b.x,dy=e.y-b.y;
       if(Math.sqrt(dx*dx+dy*dy)<e.size){
-        enemies.splice(ei,1);bullets.splice(bi,1);
-        score++;document.getElementById("score").textContent=score;
+        e.hp--;
+        bullets.splice(bi,1);
+        if(e.hp<=0){
+          enemies.splice(ei,1);
+          score++;
+          effects.push({x:e.x,y:e.y,text:"✨+1",life:30});
+          document.getElementById("score").textContent=score;
+        }
       }
     });
 
@@ -149,13 +135,21 @@ function update(){
     }
   });
 
+  // effects
+  effects.forEach((ef,i)=>{
+    ef.y-=1;
+    ef.life--;
+    ctx.fillStyle="yellow";
+    ctx.fillText(ef.text,ef.x,ef.y);
+    if(ef.life<=0)effects.splice(i,1);
+  });
+
   requestAnimationFrame(update);
 }
 
 function gameOver(){running=false;document.getElementById("gameOver").style.display="block";}
 function restart(){startGame();}
 
-// 操作
 window.addEventListener("keydown",e=>{
   if(e.code==="ArrowLeft")leftPressed=true;
   if(e.code==="ArrowRight")rightPressed=true;
@@ -169,8 +163,17 @@ window.addEventListener("keyup",e=>{
   if(e.code==="Space"){
     spacePressed=false;
     if(charge>20){
-      // 必殺技：全体攻撃
-      enemies=[];
+      let removed=0;
+      enemies=enemies.filter(e=>{
+        if(specialTargets.includes(e.type)){
+          effects.push({x:e.x,y:e.y,text:"✨+100",life:40});
+          removed++;
+          return false;
+        }
+        return true;
+      });
+      score+=100;
+      document.getElementById("score").textContent=score;
     }else{
       bullets.push({x:player.x,y:player.y});
     }
