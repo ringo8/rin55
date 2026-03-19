@@ -4,14 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>ポップシューティングゲーム</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-  body { margin:0; overflow:hidden; font-family:sans-serif; background:linear-gradient(#87CEFA,#ffb6c1);} 
+  body { margin:0; overflow:hidden; font-family:'Press Start 2P', cursive; background:linear-gradient(#87CEFA,#ffb6c1);} 
   canvas{display:block;}
   #logo{font-size:36px;font-weight:bold;background:linear-gradient(90deg,#ff69b4,#ffd700,#00ffff);-webkit-background-clip:text;color:transparent;text-shadow:2px 2px 8px rgba(0,0,0,0.3);margin-bottom:10px;}
-  #startScreen,#gameOver{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;text-align:center;}
-  #ui{position:absolute;top:10px;left:10px;color:white;font-size:18px;display:none;}
-  #controls{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);color:white;font-size:14px;background:rgba(0,0,0,0.3);padding:8px;border-radius:10px;display:none;}
-  button{margin-top:10px;padding:10px 20px;font-size:18px;border:none;border-radius:10px;background:#ff69b4;color:white;}
+  #startScreen,#gameOver,#rankingScreen{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;text-align:center;}
+  #ui{position:absolute;top:10px;left:10px;color:white;font-size:14px;display:none;}
+  #controls{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);color:white;font-size:12px;background:rgba(0,0,0,0.3);padding:8px;border-radius:10px;display:none;}
+  button{margin-top:10px;padding:10px 20px;font-size:14px;border:none;border-radius:10px;background:#ff69b4;color:white;font-family:'Press Start 2P';}
+  input{padding:8px;border-radius:8px;border:none;margin-top:10px;font-family:'Press Start 2P';}
+  .highlight{color:yellow; font-size:18px;}
 </style>
 </head>
 <body>
@@ -24,7 +27,18 @@
 <div id="ui">スコア: <span id="score">0</span><br>HP: <span id="hp">100</span></div>
 <div id="controls">← →：移動 / スペース：発射（長押しで必殺技）</div>
 
-<div id="gameOver" style="display:none;">ゲームオーバー<br><button onclick="restart()">もう一回</button></div>
+<div id="gameOver" style="display:none;">
+  ゲームオーバー<br>
+  <input id="playerName" placeholder="NAME">
+  <br>
+  <button onclick="saveScore()">登録</button>
+</div>
+
+<div id="rankingScreen" style="display:none;">
+  <h2>ランキング</h2>
+  <div id="rankingList"></div>
+  <button onclick="restart()">もう一回</button>
+</div>
 
 <canvas id="game"></canvas>
 
@@ -34,211 +48,64 @@ const ctx=canvas.getContext("2d");
 canvas.width=window.innerWidth;
 canvas.height=window.innerHeight;
 
-let player,bullets,enemies,effects,score,hp,running;
-let boss=null;
-let leftPressed=false,rightPressed=false;
-let spacePressed=false;
-let charge=0;
-let spawnRate=1000;
-let enemyTimer;
-
-const enemyTypes=[
-  {type:"🦖",hp:1},
-  {type:"🦕",hp:2},
-  {type:"🐲",hp:3},
-  {type:"👾",hp:2}
-];
-
-const specialTargets=["🐲","👾"];
+let player,score=0,hp=100,running;
+let rankings = JSON.parse(localStorage.getItem("rankings")||"[]");
+let lastRankIndex = -1;
 
 function startGame(){
   document.getElementById("startScreen").style.display="none";
   document.getElementById("ui").style.display="block";
   document.getElementById("controls").style.display="block";
-  init();update();startSpawning();
+  init();update();
 }
 
 function init(){
-  player={x:canvas.width/2,y:canvas.height-100,size:30,speed:6};
-  bullets=[];enemies=[];effects=[];score=0;hp=100;running=true;
-  boss=null;
-  charge=0;
+  player={x:canvas.width/2,y:canvas.height-100};
+  score=0;hp=100;running=true;
   document.getElementById("score").textContent=score;
   document.getElementById("hp").textContent=hp;
   document.getElementById("gameOver").style.display="none";
-}
-
-function startSpawning(){
-  clearInterval(enemyTimer);
-  enemyTimer=setInterval(()=>{
-    if(!running) return;
-    const eType=enemyTypes[Math.floor(Math.random()*enemyTypes.length)];
-    enemies.push({x:Math.random()*canvas.width,y:-20,size:30,speed:2+Math.random()*3,type:eType.type,hp:eType.hp});
-  },spawnRate);
-
-  setInterval(()=>{
-    if(spawnRate>300){spawnRate-=100;startSpawning();}
-  },5000);
-}
-
-function spawnBoss(){
-  boss={x:canvas.width/2,y:100,size:60,hp:20,maxHp:20,speed:2};
+  document.getElementById("rankingScreen").style.display="none";
 }
 
 function update(){
   if(!running)return;
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  if(leftPressed)player.x-=player.speed;
-  if(rightPressed)player.x+=player.speed;
-  player.x=Math.max(player.size,Math.min(canvas.width-player.size,player.x));
-
   ctx.font="40px serif";
   ctx.textAlign="center";
   ctx.fillText("🍎",player.x,player.y);
-
-  if(spacePressed)charge++;
-
-  // bullets
-  ctx.fillStyle="white";
-  bullets.forEach((b,i)=>{
-    b.y-=6;
-    ctx.fillRect(b.x-2,b.y,4,10);
-    if(b.y<0)bullets.splice(i,1);
-  });
-
-  // enemies
-  enemies.forEach((e,ei)=>{
-    e.y+=e.speed;
-    ctx.fillText(e.type,e.x,e.y);
-
-    bullets.forEach((b,bi)=>{
-      let dx=e.x-b.x,dy=e.y-b.y;
-      if(Math.sqrt(dx*dx+dy*dy)<e.size){
-        e.hp--;
-        bullets.splice(bi,1);
-        if(e.hp<=0){
-          enemies.splice(ei,1);
-          score++;
-          effects.push({x:e.x,y:e.y,text:"✨+1",life:30});
-          document.getElementById("score").textContent=score;
-        }
-      }
-    });
-
-    let dx=e.x-player.x,dy=e.y-player.y;
-    if(Math.sqrt(dx*dx+dy*dy)<e.size+player.size){
-      enemies.splice(ei,1);hp-=10;
-      document.getElementById("hp").textContent=hp;
-      if(hp<=0)gameOver();
-    }
-
-    if(e.y>canvas.height){
-      enemies.splice(ei,1);
-    }
-  });
-
-  // ボス出現条件
-  if(score>=1000 && !boss){
-    spawnBoss();
-  }
-
-  // boss
-  if(boss){
-    boss.x += Math.sin(Date.now()/500)*boss.speed;
-    ctx.font="80px serif";
-    ctx.fillText("🐉",boss.x,boss.y);
-
-    // HPバー
-    ctx.fillStyle="red";
-    ctx.fillRect(boss.x-50,boss.y-80,100,10);
-    ctx.fillStyle="lime";
-    ctx.fillRect(boss.x-50,boss.y-80,100*(boss.hp/boss.maxHp),10);
-
-    // ボスの弾
-    if(!boss.bullets) boss.bullets=[];
-    if(Math.random()<0.02){
-      boss.bullets.push({x:boss.x,y:boss.y});
-    }
-
-    boss.bullets.forEach((bb,bi)=>{
-      bb.y+=4;
-      ctx.fillStyle="purple";
-      ctx.fillRect(bb.x-3,bb.y,6,12);
-
-      // プレイヤーに当たる
-      let dx=bb.x-player.x,dy=bb.y-player.y;
-      if(Math.sqrt(dx*dx+dy*dy)<30){
-        boss.bullets.splice(bi,1);
-        hp-=10;
-        document.getElementById("hp").textContent=hp;
-        effects.push({x:player.x,y:player.y,text:"💥",life:20});
-        if(hp<=0)gameOver();
-      }
-
-      if(bb.y>canvas.height) boss.bullets.splice(bi,1);
-    });
-
-    bullets.forEach((b,bi)=>{
-      let dx=boss.x-b.x,dy=boss.y-b.y;
-      if(Math.sqrt(dx*dx+dy*dy)<boss.size){
-        boss.hp--;
-        bullets.splice(bi,1);
-        if(boss.hp<=0){
-          effects.push({x:boss.x,y:boss.y,text:"✨BOSS撃破!",life:60});
-          score+=50;
-          boss=null;
-        }
-      }
-    });
-  }
-
-  // effects
-  effects.forEach((ef,i)=>{
-    ef.y-=1;
-    ef.life--;
-    ctx.fillStyle="yellow";
-    ctx.fillText(ef.text,ef.x,ef.y);
-    if(ef.life<=0)effects.splice(i,1);
-  });
-
   requestAnimationFrame(update);
 }
 
-function gameOver(){running=false;document.getElementById("gameOver").style.display="block";}
-function restart(){startGame();}
+function gameOver(){
+  running=false;
+  document.getElementById("gameOver").style.display="block";
+}
 
-window.addEventListener("keydown",e=>{
-  if(e.code==="ArrowLeft")leftPressed=true;
-  if(e.code==="ArrowRight")rightPressed=true;
-  if(e.code==="Space")spacePressed=true;
-});
+function saveScore(){
+  const name=document.getElementById("playerName").value || "NO NAME";
+  rankings.push({name,score});
+  rankings.sort((a,b)=>b.score-a.score);
 
-window.addEventListener("keyup",e=>{
-  if(e.code==="ArrowLeft")leftPressed=false;
-  if(e.code==="ArrowRight")rightPressed=false;
+  lastRankIndex = rankings.findIndex(r=>r.name===name && r.score===score);
 
-  if(e.code==="Space"){
-    spacePressed=false;
-    if(charge>20){
-      enemies=enemies.filter(e=>{
-        if(specialTargets.includes(e.type)){
-          effects.push({x:e.x,y:e.y,text:"✨+100",life:40});
-          return false;
-        }
-        return true;
-      });
-      score+=100;
-      document.getElementById("score").textContent=score;
-    }else{
-      bullets.push({x:player.x,y:player.y});
-    }
-    charge=0;
-  }
-});
+  rankings=rankings.slice(0,5);
+  localStorage.setItem("rankings",JSON.stringify(rankings));
+  showRanking();
+}
 
-canvas.addEventListener("touchmove",e=>{player.x=e.touches[0].clientX;});
-canvas.addEventListener("touchstart",()=>{bullets.push({x:player.x,y:player.y});});
+function showRanking(){
+  document.getElementById("gameOver").style.display="none";
+  document.getElementById("rankingScreen").style.display="block";
+  const list=document.getElementById("rankingList");
+
+  list.innerHTML = rankings.map((r,i)=>{
+    const isMe = i === lastRankIndex;
+    return `<div class="${isMe ? 'highlight' : ''}">${i+1}位：${r.name} - ${r.score}${isMe ? ' ← YOU!' : ''}</div>`;
+  }).join("");
+}
+
+function restart(){location.reload();}
 
 </script>
 </body>
